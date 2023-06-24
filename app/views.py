@@ -6,11 +6,45 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from app.forms import TrainForm
 from datetime import timezone, datetime, timedelta
+from icecream import ic
+import sqlite3
+from django.db import connection
+from django.db.models.expressions import RawSQL
+from django.db.models.query import QuerySet
 
 
 # Create your views here.
 
 # homepage view
+
+class QuerySetWrapper:
+    def __init__(self, results, attributes):
+        self.results = results
+        self.attributes = attributes
+
+    def __iter__(self):
+        for row in self.results:
+            yield self._create_object(row)
+
+    def __len__(self):
+        return len(self.results)
+
+    def __getitem__(self, index):
+        if isinstance(index, int):
+            row = self.results[index]
+            return self._create_object(row)
+        elif isinstance(index, slice):
+            return [self._create_object(row) for row in self.results[index]]
+
+    def _create_object(self, row):
+        obj_attrs = {}
+        for i, attr in enumerate(self.attributes):
+            value = row[i]
+            if attr in ['departure_time', 'arrival_time']:
+                # Convert time strings to datetime.time objects
+                value = datetime.strptime(value, '%H:%M:%S').time()
+            obj_attrs[attr] = value
+        return type('Train', (), obj_attrs)
 
 class Home(View):
     def get(self, request):
@@ -30,6 +64,12 @@ class AvailableTrain(View):
             ctype = request.GET.get('ctype')
             adult = request.GET.get('pa')
             child = request.GET.get('pc')
+            ic(rfrom,to,ctype)
+            #query = ('SELECT name FROM app_station where name = %?;,(rfrom)')  # Replace 'your_table' with the actual table name
+            conn = sqlite3.connect('db.sqlite3')
+            cursor = conn.cursor()
+            
+            
 
             adult = int(adult)
             child = int(child)
@@ -49,12 +89,53 @@ class AvailableTrain(View):
 
             else:
                 search = Train.objects.filter(source=rfrom, destination=to, class_type=ctype)
+                #ic(search)
+                #cursor.execute('SELECT app_train.name FROM app_train JOIN app_train_class_type ON app_train.id = app_train_class_type.train_idWHERE app_train_class_type.classtype_id = ?;' ,(ctype,))
+                                      #and source_id = ? and destination_id = ?;',(ctype,rfrom,to,))
+                query = """
+                    SELECT *
+                    FROM app_train
+                    JOIN app_train_class_type ON app_train.id = app_train_class_type.train_id
+                    WHERE app_train_class_type.classtype_id = :ctype and source_id = :rfrom and destination_id = :to;
+                    """
+
+                params = {
+                    'ctype': ctype,
+                    'rfrom': rfrom,
+                    'to': to
+                    }
+
+                cursor.execute(query, params)
+                results = cursor.fetchall()
+                ic(results)
+                attributes = [column[0] for column in cursor.description]
+                search5 = QuerySetWrapper(results, attributes)
+               
+ 
+                #class_type = ClassType.objects.get(pk=ctype)
+                #ic(class_type)
+                cursor.execute('SELECT name,place FROM app_station where id = ?;',(rfrom,))
+                source = cursor.fetchall()
+                attributes = [column[0] for column in cursor.description]
+                source4 = QuerySetWrapper(source,attributes)
+
+                cursor.execute('SELECT name,place FROM app_station where id = ?;',(to,))
+                destination2 = cursor.fetchall()
+                attributes = [column[0] for column in cursor.description]
+                destination3 = QuerySetWrapper(destination2,attributes)
+
+                cursor.execute('select name,price from app_classtype where id = ?;',(ctype,))
+                class_type2 = cursor.fetchall()
+                attributes = [column[0] for column in cursor.description]
+                class_type3 = QuerySetWrapper(class_type2,attributes)
+
+                for i in class_type3:
+                    ic(i.price*1)
+
+                ic(len(search5))
                 
-                source = Station.objects.get(pk=rfrom)
-                destination = Station.objects.get(pk=to)
-                class_type = ClassType.objects.get(pk=ctype)
                 
-                return render(request, 'available_train.html', {'search': search, 'source':source, 'destination':destination, 'class_type':class_type})
+                return render(request, 'available_train.html', {'search': search5, 'source':source4, 'destination':destination3, 'class_type':class_type3})
 
         else:
             messages.warning(request, 'Find train first to get available train')
@@ -441,3 +522,6 @@ class Profile(View):
             return render(request, 'profile.html')
         else:
             return redirect('login')
+        
+
+
