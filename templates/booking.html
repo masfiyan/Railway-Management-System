@@ -24,8 +24,11 @@
                             <input class="form-control mb-2" type="email" name="email" id="email" value="{{user.email}}" required>
                             <label for="email"><h6>Phone Number:</h6></label>
                             <input class="form-control" type="text" name="phone" id="phone" value="{{user.phone}}" required>
+                            <label for="email"><h6>Enter the Name of Passengers (whom ticket will be made by their name):</h6></label>
+                            {% for i in range_tp %}
+                                <input type="text" name="passenger_name[]" id="passenger_name{{ i }}" placeholder="passenger name "/required><br>
+                            {% endfor %}
                         </div>
-                        <!-- booking info part -->
                         <div class="col-lg-6 p-1 card bookinginfo">
                             <h5 class="pb-4 mx-auto text-primary">Booking Info</h5>
                             <h6>Train Name: {{train}}<input type="hidden" name="train" value="{{train}}"></h6>
@@ -60,17 +63,17 @@
                         <h4>Please complete your payment</h4>
                     </div>
                     <div class="col-lg-12 pl-4 pt-4 text-muted">
-                        <h6>You have to pay total: {{total_fare}} Taka</h6>
-                        <h6>Pay to this number: +8801700000001</h6>
+                        <h6>You have to pay total: {{total_fare}} PKR</h6>
+                        <h6>Pay to this number: ON Sir Zeeshan Number</h6>
                     </div>
                     <div class="col-lg-12 pl-4 pt-2">
                         <h6>Select a Payment Method:</h6>
-                        <input type="radio" name="ptype" id="bkash" value="bkash" required>
-                        <label for="bkash">Bkash</label><br>
-                        <input type="radio" name="ptype" id="rocket" value="rocket" required>
-                        <label for="rocket">Rocket</label><br>
-                        <input type="radio" name="ptype" id="nagad" value="nagad" required>
-                        <label for="nagad">Nagad</label><br>
+                        <input type="radio" name="ptype" id="jcash" value="jcash" required>
+                        <label for="Jazz cash">Jazz Cash</label><br>
+                        <input type="radio" name="ptype" id="mbank" value="mbank" required>
+                        <label for="mbank">Meezan Bank</label><br>
+                        <input type="radio" name="ptype" id="hbl" value="hbl" required>
+                        <label for="hbl">Habib Bank Limited</label><br>
                         <label for="phone">Enter the phone number:</label>
                         <input type="text" class="form-control" name="pay_phone" id="phone" placeholder="enter the phone number from which you are doing payment" required>
                         <label for="trxid">Enter transaction id:</label>

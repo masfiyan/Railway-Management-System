@@ -1,6 +1,6 @@
 from django.contrib import admin
-from app.models import CustomUser, Station, ClassType, Train, Booking, BookingDetail, \
-    BillingInfo, Payment, Ticket, Feedback, ContactNumber, ContactForm
+from app.models import CustomUser, Station, ClassType, Train, Booking, \
+    BillingInfo, Payment, Ticket, Feedback, ContactNumber
 
 # Register your models here.
 
@@ -47,12 +47,7 @@ class BookingAdmin(admin.ModelAdmin):
 
 
 # admin.site.register(BookingDetail)
-@admin.register(BookingDetail)
-class BookingDetailAdmin(admin.ModelAdmin):
-    list_display = ('id', 'train', 'source', 'destination', 'travel_date', 'travel_time', 'nop',
-                    'adult', 'child', 'class_type', 'fpp', 'total_fare')
-    list_filter = ('class_type', 'train')
-    list_per_page = 10
+
 
 
 # admin.site.register(BillingInfo)
@@ -94,7 +89,3 @@ class ContactNumberAdmin(admin.ModelAdmin):
 
 
 # admin.site.register(ContactForm)
-@admin.register(ContactForm)
-class ContactFormAdmin(admin.ModelAdmin):
-    list_display = ('name', 'email', 'message')
-    list_per_page = 10

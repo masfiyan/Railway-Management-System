@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect
 from django.views import View
-from app.models import CustomUser, Feedback, ContactForm, ContactNumber, Train, Station, ClassType, Booking, BookingDetail, BillingInfo, Payment, Ticket
+from app.models import CustomUser, Feedback, ContactNumber, Train, Station, ClassType, Booking, BillingInfo, Payment, Ticket
 from django.http import HttpResponse
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
@@ -163,19 +163,27 @@ class Bookings(View):
                 ctype = request.GET.get('ctype')
                 total_fare = request.GET.get('total_fare')
 
-                fare_each = ClassType.objects.get(name=ctype)
+                #fare_each = ClassType.objects.get(name=ctype)
+                conn = sqlite3.connect('db.sqlite3')
+                cursor = conn.cursor()
+                cursor.execute('SELECT * FROM app_classtype where name = ?;',(ctype,))
+                fare_each1 = cursor.fetchall()
+                attributes = [column[0] for column in cursor.description]
+                fare_each2 = QuerySetWrapper(fare_each1,attributes)
 
                 # this is for booking seat according to train seat capacity
 
                 ticket = Ticket.objects.filter(train_name=train, travel_date=date)
-                # if ticket.count() < 30:
-                #     print(ticket.count())
-                available_seat = 30 - ticket.count()
+                cursor.execute('SELECT count(*) FROM app_ticket where train_name = ? and travel_date = ?;',(train,date,))
+                ticket1 = cursor.fetchall()
+                
+
+                available_seat = 30 - (ticket1[0])[0]
                 print(available_seat)
                 tp = int(tp)
                 if available_seat >= tp:
 
-                    return render(request, 'booking.html', {'train':train, 'source':source, 'destination':destination, 'date':date, 'departure':departure, 'arrival':arrival, 'tp':tp, 'pa':pa, 'pc':pc, 'ctype':ctype, 'total_fare':total_fare, 'fare_each':fare_each})
+                    return render(request, 'booking.html', {'train':train, 'source':source, 'destination':destination, 'date':date, 'departure':departure, 'arrival':arrival, 'tp':tp, 'range_tp':range(tp),'pa':pa, 'pc':pc, 'ctype':ctype, 'total_fare':total_fare, 'fare_each':fare_each2})
                 else:
                     messages.warning(request, f"sorry! {available_seat} seat is available for this train. Try again!")
                     return redirect('home')
@@ -193,6 +201,7 @@ class Bookings(View):
 
     def post(self, request):
         user = request.user
+        user_id = request.user.id
 
         train = request.POST['train']
         source = request.POST['source']
@@ -213,6 +222,8 @@ class Bookings(View):
         pay_method = request.POST['ptype']
         pay_phone = request.POST['pay_phone']
         trxid = request.POST['trxid']
+        value = request.POST.getlist('passenger_name[]')
+        ic(value)
 
         # time = Train.objects.get(departure_time=travel_time)
         # travel_time = int(travel_time)
@@ -249,28 +260,43 @@ class Bookings(View):
         
         # dt = datetime.strftime("YYYY-MM-DD HH:MM[:ss[.uuuuuu]][TZ]", '2022-04-10 14:30:20')
         # print(dt)
+        current_date = datetime.now().date()
+        current_time = datetime.now().time()
+        #current_date = timezone.localtime(timezone.now(), timezone=timezone.get_current_timezone())
+        current_date_str = current_date.strftime('%Y-%m-%d')
+        #current_time = timezone.localtime(timezone.now(), timezone=timezone.get_current_timezone()).time()
+        current_time_str = current_time.strftime('%H:%M:%S')
 
-        
-        booking = Booking(user=user, travel_dt=str(travel_date)+ ' ' + str(travel_time), travel_date=travel_date)
+        #booking = Booking(user=user, travel_dt=str(travel_date)+ ' ' + str(travel_time), travel_date=travel_date)
+        conn = sqlite3.connect('db.sqlite3')
+        cursor = conn.cursor()
+        cursor.execute('insert into app_booking (status,booking_date,booking_time,user_id,travel_dt,travel_date) values (?,?,?,?,?,?)',('Confirmed',current_date_str,current_time_str,user_id,str(travel_date)+ ' ' + str(travel_time),travel_date,))
+        booking_id = cursor.lastrowid
+        conn.commit()
 
-        booking_detail = BookingDetail(booking=booking, train=train, source=source, destination=destination, travel_date=travel_date, nop=nop, adult=adult, child=child, class_type=class_type, fpp=fpp, total_fare=total_fare, travel_time=str(travel_time), travel_dt=str(travel_date)+ ' ' + str(travel_time))
+        #booking_detail = BookingDetail(booking=booking, train=train, source=source, destination=destination, travel_date=travel_date, nop=nop, adult=adult, child=child, class_type=class_type, fpp=fpp, total_fare=total_fare, travel_time=str(travel_time), travel_dt=str(travel_date)+ ' ' + str(travel_time))
         
-        billing_info = BillingInfo(booking=booking, user=user, email=email, phone=phone)
+        #billing_info = BillingInfo(booking=booking, user=user, email=email, phone=phone)
+
+        cursor.execute('insert into app_billinginfo (email,phone,booking_id,user_id) values (?,?,?,?)',(email,phone,booking_id,user_id,))
+        conn.commit()
         
-        payment = Payment(booking=booking, user=user, pay_amount=total_fare, pay_method=pay_method, phone=pay_phone, trxid=trxid)
-        
-        booking.save()
-        booking_detail.save()
-        billing_info.save()
-        payment.save()
+        #payment = Payment(booking=booking, user=user, pay_amount=total_fare, pay_method=pay_method, phone=pay_phone, trxid=trxid)
+        cursor.execute('insert into app_payment (status,pay_amount,pay_method,phone,trxid,booking_id,user_id) values (?,?,?,?,?,?,?)',('Paid',total_fare,pay_method,phone,trxid,booking_id,user_id,))
+        conn.commit()
+        #booking.save()
+        #booking_detail.save()
+        #billing_info.save()
+        #payment.save()
 
         # logic to generate ticket
         nop = int(nop)
-        i = 1
-        while i <= nop:
-            ticket = Ticket(booking=booking, user=user, phone=phone, source=source, destination=destination, departure=str(travel_time), travel_date=travel_date, train_name=train, class_type=class_type, fare=fpp)
-            ticket.save()
-            i+=1
+ 
+        for i in value:
+            cursor.execute('SELECT price FROM app_classtype where name = ?;',(class_type,))
+            price = cursor.fetchall()
+            cursor.execute('insert into app_ticket(booking_id,class_type,departure,destination,fare,phone,source,train_name,travel_date,user_id,passenger) values (?,?,?,?,?,?,?,?,?,?,?)',(booking_id,class_type,str(travel_time),destination,(price[0])[0],phone,source,train,travel_date,user_id,i,))
+            conn.commit()
         # ticket generate logic end
             
         messages.success(request, 'Congratulation! Your booking is successfull')
@@ -282,33 +308,25 @@ class Bookings(View):
 class BookingHistory(View):
     def get(self, request):
         user = request.user
+        user_id = request.user.id
         if user.is_authenticated:
-            booking = Booking.objects.filter(user=user).order_by('-id')
-
+            #booking = Booking.objects.filter(user=user).order_by('-id')
+            conn = sqlite3.connect('db.sqlite3')
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM app_booking WHERE user_id = ? ORDER BY id DESC',(user_id,))
+            booking1 = cursor.fetchall()
+            attributes = [column[0] for column in cursor.description]
+            booking2 = QuerySetWrapper(booking1,attributes)
             current_date = datetime.now(timezone.utc)
             
-            return render(request, 'booking_history.html', {'booking':booking, 'current_date':current_date})
+            return render(request, 'booking_history.html', {'booking':booking2, 'current_date':current_date})
         else:
             return redirect('login')
 
 
 # booking detail page view
 
-class BookingDetails(View):
-    def get(self, request, pk):
-        user = request.user
-        if user.is_authenticated:
-            bookings = Booking.objects.get(id=pk)
-            if user == bookings.user:
-                booking_detail = BookingDetail.objects.get(booking=pk)
-                billing = BillingInfo.objects.get(booking=pk)
-                payment = Payment.objects.get(booking=pk)
-                return render(request, 'booking_detail.html', {'booking_detail':booking_detail, 'billing':billing, 'payment':payment})
-            else:
-                messages.warning(request, "Invalid booking id!")
-                return redirect('booking_history')
-        else:
-            return redirect('login')
+
 
 
 # ticket page view
@@ -316,11 +334,24 @@ class BookingDetails(View):
 class Tickets(View):
     def get(self, request, pk):
         user = request.user
+        user_id = request.user.id
         if user.is_authenticated:
             bookings = Booking.objects.get(id=pk)
-            if user == bookings.user:
-                ticket = Ticket.objects.filter(booking=bookings)
-                return render(request, 'ticket.html', {'ticket':ticket, 'bookings':bookings})
+            conn = sqlite3.connect('db.sqlite3')
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id FROM app_booking WHERE id = ?;',(pk,))
+            booking1 = cursor.fetchall()
+            attributes = [column[0] for column in cursor.description]
+            booking2 = QuerySetWrapper(booking1,attributes)
+            if user_id == (booking1[0])[0]:
+                #ticket = Ticket.objects.filter(booking=bookings)
+                cursor.execute('SELECT * FROM app_ticket WHERE booking_id = ?;',(pk,))
+                ticket1 = cursor.fetchall()
+                attributes = [column[0] for column in cursor.description]
+                ticket2 = QuerySetWrapper(ticket1,attributes)
+    
+
+                return render(request, 'ticket.html', {'ticket':ticket2, 'bookings':booking2})
             else:
                 messages.warning(request, 'Invalid booking id!')
                 return redirect('booking_history')
@@ -328,18 +359,11 @@ class Tickets(View):
             return redirect('login')
 
 
-# cancel booking view
 
-class CancelBooking(View):
-    def post(self, request):
-        id = request.POST['booking_id']
-        Booking.objects.filter(id=id).delete()
-        messages.success(request, 'Your booking canceled successfully')
-        return redirect(request.META['HTTP_REFERER'])
 
 
 # signup for user
-
+from django.contrib.auth.hashers import make_password
 def signup(request):
     user = request.user
     if user.is_authenticated:
@@ -353,53 +377,20 @@ def signup(request):
             phone = request.POST['phone']        
             password1 = request.POST['password1']
             password2 = request.POST['password2']
+            password3 = make_password(password1)
 
             if password1 != password2:
                 messages.warning(request,"Password didn't matched")
                 return redirect('signup')
         
-            elif username == '':
-                messages.warning(request,"Please enter a username")
-                return redirect('signup')
-
-            elif first_name == '':
-                messages.warning(request,"Please enter first name")
-                return redirect('signup')
-
-            elif last_name == '':
-                messages.warning(request,"Please enter last name")
-                return redirect('signup')
-
-            elif email == '':
-                messages.warning(request,"Please enter email address")
-                return redirect('signup')
-
-            elif phone == '':
-                messages.warning(request,"Please enter phone number")
-                return redirect('signup')
-
-            elif password1 == '':
-                messages.warning(request,"Please enter password")
-                return redirect('signup')
-
-            elif password2 == '':
-                messages.warning(request,"Please enter confirm password")
-                return redirect('signup')
-            
-            try:
-                if CustomUser.objects.all().get(username=username):
-                    messages.warning(request,"username not Available")
-                    return redirect('signup')
-
-            except:
-                pass
-                
-
-            new_user = CustomUser.objects.create_user(first_name=first_name, last_name=last_name, username=username, email=email, phone=phone, password=password1)
-            new_user.is_superuser=False
-            new_user.is_staff=False
-                
-            new_user.save()
+            #new_user = CustomUser.objects.create_user(first_name=first_name, last_name=last_name, username=username, email=email, phone=phone, password=password1)
+            #new_user.is_superuser=False
+            #new_user.is_staff=False
+            conn = sqlite3.connect('db.sqlite3')
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO app_customuser (password, is_superuser, username, first_name,is_staff, is_active, date_joined,email, phone, last_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?,?, ?);',(password3, 0, username, first_name, 0, 1,datetime.now(),email,phone,last_name,))
+            conn.commit()
+            #new_user.save()
             messages.success(request,"Registration Successfull")
             return redirect("login")
         return render(request, 'signup.html')
@@ -436,32 +427,28 @@ def user_login(request):
 class Contact(View):
     def get(self, request):
         contact = ContactNumber.objects.all()
+        conn = sqlite3.connect('db.sqlite3')
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM app_contactnumber')
+        booking1 = cursor.fetchall()
+        attributes = [column[0] for column in cursor.description]
+        booking2 = QuerySetWrapper(booking1,attributes)
         return render(request, 'contact.html', {'contact': contact})
 
-    def post(self, request):
-        name = request.POST['name']
-        email = request.POST['email']
-        message = request.POST['message']
-
-        if name == '' or email == '' or message == '':
-            messages.warning(request, 'Please fillup all the fields to send message!')
-            return redirect('contact')
-        
-        else:
-            form = ContactForm(name=name, email=email, message=message)
-            form.save()
-            messages.success(request, 'You have successfully sent the message!')  
-            return redirect('contact')
 
 
 # feedback page view
 
 class Feedbacks(View):
     def get(self, request):
+        conn = sqlite3.connect('db.sqlite3')
+        cursor = conn.cursor()
         feedback = Feedback.objects.all().order_by('-id')
         return render(request, 'feedback.html', {'feedback': feedback})
 
     def post(self, request):
+        conn = sqlite3.connect('db.sqlite3')
+        cursor = conn.cursor()
         user = request.user
         if user.is_authenticated:
             comment = request.POST['feedback']
@@ -473,6 +460,8 @@ class Feedbacks(View):
             else:
                 feedback = Feedback(name=user.first_name + ' ' + user.last_name, feedback=comment)
                 feedback.save()
+                cursor.execute('INSERT INTO app_feedback (name, feedback) VALUES (?, ?);',(user.first_name + ' ' + user.last_name, comment))
+                conn.commit()
                 messages.success(request, 'Thanks for your feedback!')
                 return redirect('feedback')
 
@@ -483,34 +472,7 @@ class Feedbacks(View):
 
 # verify ticket page view
 
-class VerifyTicket(View):
-    def get(self, request):
-        trains = Train.objects.all()
-        if request.GET:
 
-            train = request.GET.get('train')
-            date = request.GET.get('date')
-            tid = request.GET.get('tid')
-
-            tid = str(tid)
-            date = str(date)
-
-            ticket = None
-
-            try:
-                ticket = Ticket.objects.get(id=tid, train_name=train, travel_date=date)
-                ticket.id = str(ticket.id)
-                ticket.travel_date = str(ticket.travel_date)
-                return render(request, 'verify_ticket.html', {'train':trains, 'ticket':ticket})
-
-            except:
-                ticket = None
-                return render(request, 'verify_ticket.html', {'train':trains, 'ticket':ticket})
-            
-        else:
-            return render(request, 'verify_ticket.html', {'train':trains})
-
-        return render(request, 'verify_ticket.html', {'train':trains})
 
 
 # profile page view for user
