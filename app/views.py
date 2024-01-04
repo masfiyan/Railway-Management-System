@@ -134,8 +134,10 @@ class AvailableTrain(View):
 
                 ic(len(search5))
                 
+                count = len(search5) == 0
                 
-                return render(request, 'available_train.html', {'search': search5, 'source':source4, 'destination':destination3, 'class_type':class_type3})
+                
+                return render(request, 'available_train.html', {'search': search5, 'source':source4, 'destination':destination3, 'class_type':class_type3 , 'count':count })
 
         else:
             messages.warning(request, 'Find train first to get available train')
@@ -143,7 +145,6 @@ class AvailableTrain(View):
 
 
 #Booking page view
-
 class Bookings(View):
     def get(self, request):
         if request.GET:
